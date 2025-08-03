@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tool QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: Arial; text-align: center; padding: 20px; }
+    #qr-reader { width: 300px; margin: auto; }
+    #result { margin-top: 20px; font-size: 18px; padding: 10px; border: 2px solid #4CAF50; border-radius: 8px; display: inline-block; background: #f0fdf4; }
+    .expired { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>?? Scan Tool QR Code</h2>
+  <div id="qr-reader"></div>
+  <div id="result" style="display:none;"></div>
+
+  <script>
+    function parseValidityDate(text) {
+      const match = text.match(/Valid Until ([A-Za-z]+)\s+(\d{4})/i);
+      if (!match) return null;
+      const [_, month, year] = match;
+      const date = new Date(`${month} 1, ${year}`);
+      return isNaN(date) ? null : new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    }
+
+    function isExpired(validityText) {
+      const expiryDate = parseValidityDate(validityText);
+      if (!expiryDate) return false;
+      const now = new Date();
+      return now > expiryDate;
+    }
+
+    function uploadToGoogleSheets(rowData) {
+      fetch("PASTE_YOUR_WEB_APP_URL_HERE", {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rowData)
+      });
+    }
+
+    function showResult(data) {
+      const lines = data.trim().split("\n");
+      const status = lines[0] || "Unknown";
+      const validity = lines[1] || "Unknown";
+      const expired = isExpired(validity);
+      const scanTime = new Date().toLocaleString();
+      const expiryStatus = expired ? "EXPIRED" : "VALID";
+
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('result').innerHTML = `
+        <strong>Status:</strong> ${status}<br>
+        <strong>Validity:</strong> ${validity}<br>
+        <strong>Scan Time:</strong> ${scanTime}<br>
+        <strong>Expiry:</strong> <span class="${expired ? 'expired' : ''}">${expiryStatus}</span>
+      `;
+
+      // Upload to Google Sheets
+      uploadToGoogleSheets({
+        status: status,
+        validity: validity,
+        expiryStatus: expiryStatus,
+        scanTime: scanTime
+      });
+    }
+
+    function startScanner() {
+      const scanner = new Html5Qrcode("qr-reader");
+      scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        qrMessage => {
+          showResult(qrMessage);
+          scanner.stop();
+          setTimeout(() => startScanner(), 2000);
+        },
+        error => { }
+      );
+    }
+
+    startScanner();
+  </script>
+</body>
+</html>
